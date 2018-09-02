@@ -195,6 +195,7 @@ namespace Config
             model->show_fps = reader->GetBoolean("show_fps", false);
             model->trap_cursor = reader->GetBoolean("trap_cursor", false);
             model->auto_open_shops = reader->GetBoolean("auto_open_shops", false);
+            model->tilespecific_staff_patrolling = reader->GetBoolean("tilespecific_staff_patrolling", false);
             model->scenario_select_mode = reader->GetInt32("scenario_select_mode", SCENARIO_SELECT_MODE_ORIGIN);
             model->scenario_unlocking_enabled = reader->GetBoolean("scenario_unlocking_enabled", true);
             model->scenario_hide_mega_park = reader->GetBoolean("scenario_hide_mega_park", true);
@@ -267,6 +268,7 @@ namespace Config
         writer->WriteBoolean("show_fps", model->show_fps);
         writer->WriteBoolean("trap_cursor", model->trap_cursor);
         writer->WriteBoolean("auto_open_shops", model->auto_open_shops);
+        writer->WriteBoolean("tilespecific_staff_patrolling", model->tilespecific_staff_patrolling);
         writer->WriteInt32("scenario_select_mode", model->scenario_select_mode);
         writer->WriteBoolean("scenario_unlocking_enabled", model->scenario_unlocking_enabled);
         writer->WriteBoolean("scenario_hide_mega_park", model->scenario_hide_mega_park);

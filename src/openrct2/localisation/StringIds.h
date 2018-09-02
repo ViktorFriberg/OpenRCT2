@@ -3891,6 +3891,9 @@ enum
     STR_ALWAYS_NATIVE_LOADSAVE = 6264,
     STR_ALWAYS_NATIVE_LOADSAVE_TIP = 6265,
 
+    STR_TILESPECIFIC_PATROLLING = 6266,
+    STR_TILESPECIFIC_PATROLLING_TIP = 6267,
+
     // Have to include resource strings (from scenarios and objects) for the time being now that language is partially working
     STR_COUNT = 32768
 };

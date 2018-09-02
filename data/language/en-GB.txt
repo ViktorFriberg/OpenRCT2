@@ -3726,6 +3726,8 @@ STR_6262    :Master volume
 STR_6263    :{SMALLFONT}{BLACK}Toggle all sound on/off
 STR_6264    :Always use system file browser
 STR_6265    :{SMALLFONT}{BLACK}When enabled, your operating system's file browser will be used instead of OpenRCT2's.
+STR_6266	:Use tilespecific staff patrolling
+STR_6267	:Changes so when choosing staff patrolling it is controlled with 1x1 grid details instead of 4x4
 
 #############
 # Scenarios #

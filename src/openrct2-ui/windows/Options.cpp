@@ -166,6 +166,7 @@ enum WINDOW_OPTIONS_WIDGET_IDX {
     WIDX_REAL_NAME_CHECKBOX,
     WIDX_AUTO_STAFF_PLACEMENT,
     WIDX_AUTO_OPEN_SHOPS,
+    WIDX_TILESPECIFIC_STAFF_PATROLLING,
     WIDX_DEFAULT_INSPECTION_INTERVAL,
     WIDX_DEFAULT_INSPECTION_INTERVAL_DROPDOWN,
 
@@ -339,12 +340,13 @@ static rct_widget window_options_misc_widgets[] = {
     { WWT_CHECKBOX,         2,  10,     299,    SCENARIO_OPTIONS_START + 15,    SCENARIO_OPTIONS_START + 29,    STR_ALLOW_EARLY_COMPLETION,       STR_EARLY_COMPLETION_TIP },             // Allow early scenario completion
 #undef SCENARIO_OPTIONS_START
 #define TWEAKS_START 201
-    { WWT_GROUPBOX,         1,  5,      304,    TWEAKS_START + 0,               TWEAKS_START + 80,              STR_OPTIONS_TWEAKS,               STR_NONE },
+    { WWT_GROUPBOX,         1,  5,      304,    TWEAKS_START + 0,               TWEAKS_START + 95,              STR_OPTIONS_TWEAKS,               STR_NONE },
     { WWT_CHECKBOX,         2,  10,     299,    TWEAKS_START + 15,              TWEAKS_START + 29,              STR_REAL_NAME,                    STR_REAL_NAME_TIP },                    // Show 'real' names of guests
     { WWT_CHECKBOX,         2,  10,     299,    TWEAKS_START + 30,              TWEAKS_START + 44,              STR_AUTO_STAFF_PLACEMENT,         STR_AUTO_STAFF_PLACEMENT_TIP },         // Auto staff placement
     { WWT_CHECKBOX,         2,  10,     299,    TWEAKS_START + 45,              TWEAKS_START + 59,              STR_AUTO_OPEN_SHOPS,              STR_AUTO_OPEN_SHOPS_TIP },              // Automatically open shops & stalls
-    { WWT_DROPDOWN,         1,  175,    299,    TWEAKS_START + 61,              TWEAKS_START + 72,              STR_NONE,                         STR_NONE },                             // Default inspection time dropdown
-    { WWT_BUTTON,           1,  288,    298,    TWEAKS_START + 62,              TWEAKS_START + 71,              STR_DROPDOWN_GLYPH,               STR_DEFAULT_INSPECTION_INTERVAL_TIP },  // Default inspection time dropdown button
+    { WWT_CHECKBOX,         2,  10,     299,    TWEAKS_START + 60,              TWEAKS_START + 74,              STR_TILESPECIFIC_PATROLLING,      STR_TILESPECIFIC_PATROLLING_TIP },      // Use tilespecific staff patrolling
+    { WWT_DROPDOWN,         1,  175,    299,    TWEAKS_START + 76,              TWEAKS_START + 87,              STR_NONE,                         STR_NONE },                             // Default inspection time dropdown
+    { WWT_BUTTON,           1,  288,    298,    TWEAKS_START + 77,              TWEAKS_START + 86,              STR_DROPDOWN_GLYPH,               STR_DEFAULT_INSPECTION_INTERVAL_TIP },  // Default inspection time dropdown button
 #undef TWEAKS_START
     { WIDGETS_END },
 };
@@ -587,6 +589,7 @@ static uint64_t window_options_page_enabled_widgets[] = {
     (1 << WIDX_SCENARIO_UNLOCKING) |
     (1 << WIDX_ALLOW_EARLY_COMPLETION) |
     (1 << WIDX_AUTO_OPEN_SHOPS) |
+    (1 << WIDX_TILESPECIFIC_STAFF_PATROLLING) |
     (1 << WIDX_DEFAULT_INSPECTION_INTERVAL) |
     (1 << WIDX_DEFAULT_INSPECTION_INTERVAL_DROPDOWN),
 
@@ -892,6 +895,11 @@ static void window_options_mouseup(rct_window* w, rct_widgetindex widgetIndex)
                     break;
                 case WIDX_AUTO_OPEN_SHOPS:
                     gConfigGeneral.auto_open_shops = !gConfigGeneral.auto_open_shops;
+                    config_save_default();
+                    window_invalidate(w);
+                    break;
+                case WIDX_TILESPECIFIC_STAFF_PATROLLING:
+                    gConfigGeneral.tilespecific_staff_patrolling = !gConfigGeneral.tilespecific_staff_patrolling;
                     config_save_default();
                     window_invalidate(w);
                     break;
@@ -1865,6 +1873,8 @@ static void window_options_invalidate(rct_window* w)
             widget_set_checkbox_value(w, WIDX_REAL_NAME_CHECKBOX, gConfigGeneral.show_real_names_of_guests);
             widget_set_checkbox_value(w, WIDX_AUTO_STAFF_PLACEMENT, gConfigGeneral.auto_staff_placement);
             widget_set_checkbox_value(w, WIDX_AUTO_OPEN_SHOPS, gConfigGeneral.auto_open_shops);
+            widget_set_checkbox_value(w, WIDX_TILESPECIFIC_STAFF_PATROLLING, gConfigGeneral.tilespecific_staff_patrolling);
+
             widget_set_checkbox_value(w, WIDX_ALLOW_EARLY_COMPLETION, gConfigGeneral.allow_early_completion);
 
             if (gConfigGeneral.scenario_select_mode == SCENARIO_SELECT_MODE_DIFFICULTY)
