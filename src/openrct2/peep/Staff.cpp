@@ -57,6 +57,8 @@ const rct_string_id StaffCostumeNames[] = {
 // Every staff member has STAFF_PATROL_AREA_SIZE elements assigned to in this array, indexed by their staff_id
 // Additionally there is a patrol area for each staff type, which is the union of the patrols of all staff members of that type
 uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
+uint32_t* gStaffTilePatrolAreas = nullptr;
+
 uint8_t gStaffModes[STAFF_MAX_COUNT + STAFF_TYPE_COUNT];
 uint16_t gStaffDrawPatrolAreas;
 colour_t gStaffHandymanColour;
@@ -352,6 +354,13 @@ static money32 staff_hire_new_staff_member(
 
             gStaffModes[newStaffId] = STAFF_MODE_WALK;
 
+            if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+            {
+                for (i = 0; i < STAFF_PATROL_AREA_TILESPECIFIC_SIZE; ++i)
+                {
+                    gStaffTilePatrolAreas[newStaffId * STAFF_PATROL_AREA_TILESPECIFIC_SIZE + i] = 0;
+                }
+            }
             for (i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
             {
                 gStaffPatrolAreas[newStaffId * STAFF_PATROL_AREA_SIZE + i] = 0;
@@ -459,6 +468,7 @@ void game_command_set_staff_patrol(
     {
         int32_t x = *eax;
         int32_t y = *ecx;
+
         uint16_t sprite_id = *edx;
         if (sprite_id >= MAX_SPRITES)
         {
@@ -476,10 +486,49 @@ void game_command_set_staff_patrol(
         rct_peep* peep = &sprite->peep;
         int32_t patrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
 
+        if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas == nullptr)
+        {
+            gStaffTilePatrolAreas = new uint32_t[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_TILESPECIFIC_SIZE]();
+            //gStaffTilePatrolAreas all 0 as default from "new constructor"
+
+            for (int32_t i = 0; i < STAFF_MAX_COUNT + STAFF_TYPE_COUNT; ++i)
+            {
+                for (int32_t u = 0; u < STAFF_PATROL_AREA_SIZE; ++u)
+                {
+                    if (gStaffPatrolAreas[i * STAFF_PATROL_AREA_SIZE + u] != 0)
+                    {
+                        //We only need to care about chunks that are non-zero
+                        uint32_t val = gStaffPatrolAreas[i * STAFF_PATROL_AREA_SIZE + u];
+                        for (int b = 0; b < 32; ++b)
+                        {
+                            if (val & ((uint32_t)1 << b))
+                            {
+                                //bit nr b is set...
+                                //Figure out x and y...
+                                int sy = u >> 1; //0..64
+                                int sx = b + (u % 2) * 32; //0..64
+                                for (int tx = 0; tx < 4; ++tx)
+                                {
+                                    for (int ty = 0; ty < 4; ++ty)
+                                    {
+                                        staff_set_patrol_area(i, (sx*4 + tx) * 32, (sy*4 + ty) * 32, true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else if (gConfigGeneral.tilespecific_staff_patrolling == false && gStaffTilePatrolAreas != nullptr)
+        {
+            delete[] gStaffTilePatrolAreas;
+            gStaffTilePatrolAreas = nullptr;
+        }
         staff_toggle_patrol_area(peep->staff_id, x, y);
 
         int32_t ispatrolling = 0;
-        for (int32_t i = 0; i < 128; i++)
+        for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
         {
             ispatrolling |= gStaffPatrolAreas[patrolOffset + i];
         }
@@ -581,12 +630,19 @@ void staff_update_greyed_patrol_areas()
 {
     rct_peep* peep;
 
+    uint32_t* patrolAreas = gStaffPatrolAreas;
+    int patrolAreaSize = STAFF_PATROL_AREA_SIZE;
+    if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+    {
+        patrolAreas = gStaffTilePatrolAreas;
+        patrolAreaSize = STAFF_PATROL_AREA_TILESPECIFIC_SIZE;
+    }
     for (int32_t staff_type = 0; staff_type < STAFF_TYPE_COUNT; ++staff_type)
     {
-        int32_t staffPatrolOffset = (staff_type + STAFF_MAX_COUNT) * STAFF_PATROL_AREA_SIZE;
-        for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
+        int32_t staffPatrolOffset = (staff_type + STAFF_MAX_COUNT) * patrolAreaSize;
+        for (int32_t i = 0; i < patrolAreaSize; i++)
         {
-            gStaffPatrolAreas[staffPatrolOffset + i] = 0;
+            patrolAreas[staffPatrolOffset + i] = 0;
         }
 
         for (uint16_t sprite_index = gSpriteListHead[SPRITE_LIST_PEEP]; sprite_index != SPRITE_INDEX_NULL;
@@ -596,10 +652,10 @@ void staff_update_greyed_patrol_areas()
 
             if (peep->type == PEEP_TYPE_STAFF && staff_type == peep->staff_type)
             {
-                int32_t peepPatrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
-                for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
+                int32_t peepPatrolOffset = peep->staff_id * patrolAreaSize;
+                for (int32_t i = 0; i < patrolAreaSize; i++)
                 {
-                    gStaffPatrolAreas[staffPatrolOffset + i] |= gStaffPatrolAreas[peepPatrolOffset + i];
+                    patrolAreas[staffPatrolOffset + i] |= patrolAreas[peepPatrolOffset + i];
                 }
             }
         }
@@ -823,17 +879,49 @@ void staff_reset_stats()
 
 bool staff_is_patrol_area_set(int32_t staffIndex, int32_t x, int32_t y)
 {
+    if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+    {
+        int32_t tileX = (x & 0x1FE0) >> 5; // 0..256
+        int32_t tileY = (y & 0x1FE0) >> 5; // 0..256
+
+        int32_t chunkOffset = ((tileX << 8) | tileY) >> 5; // (tileX * 256(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = tileY & 0x1F;                   // 0..32
+
+        uint32_t* patrolAreasChunk = &gStaffTilePatrolAreas[staffIndex * STAFF_PATROL_AREA_TILESPECIFIC_SIZE + chunkOffset];
+        return (*patrolAreasChunk) & (((uint32_t)1) << bitIndex);
+    }
+
     x = (x & 0x1F80) >> 7;
     y = (y & 0x1F80) >> 1;
 
     int32_t peepOffset = staffIndex * STAFF_PATROL_AREA_SIZE;
-    int32_t offset = (x | y) >> 5;
-    int32_t bitIndex = (x | y) & 0x1F;
+    int32_t offset = (x | y) >> 5;     // divide by 32
+    int32_t bitIndex = (x | y) & 0x1F; // % 32
     return gStaffPatrolAreas[peepOffset + offset] & (((uint32_t)1) << bitIndex);
 }
 
 void staff_set_patrol_area(int32_t staffIndex, int32_t x, int32_t y, bool value)
 {
+    if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+    {
+        int32_t tileX = (x & 0x1FE0) >> 5; // 0..256
+        int32_t tileY = (y & 0x1FE0) >> 5; // 0..256
+
+        int32_t chunkOffset = ((tileX << 8) | tileY) >> 5; // (tileX * 256(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = tileY & 0x1F;                   // 0..32
+
+        uint32_t* patrolAreasChunk = &gStaffTilePatrolAreas[staffIndex * STAFF_PATROL_AREA_TILESPECIFIC_SIZE + chunkOffset];
+        if (value)
+        {
+            (*patrolAreasChunk) |= (((uint32_t)1) << bitIndex);
+        }
+        else
+        {
+            (*patrolAreasChunk) &= ~(((uint32_t)1) << bitIndex);
+        }
+        return;
+    }
+
     x = (x & 0x1F80) >> 7;
     y = (y & 0x1F80) >> 1;
 
@@ -853,6 +941,19 @@ void staff_set_patrol_area(int32_t staffIndex, int32_t x, int32_t y, bool value)
 
 void staff_toggle_patrol_area(int32_t staffIndex, int32_t x, int32_t y)
 {
+    if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+    {
+        int32_t tileX = (x & 0x1FE0) >> 5; // 0..256
+        int32_t tileY = (y & 0x1FE0) >> 5; // 0..256
+
+        int32_t chunkOffset = ((tileX << 8) | tileY) >> 5; // (tileX * 256(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = tileY & 0x1F;                   // 0..32
+
+        uint32_t* patrolAreasChunk = &gStaffTilePatrolAreas[staffIndex * STAFF_PATROL_AREA_TILESPECIFIC_SIZE + chunkOffset];
+        (*patrolAreasChunk) ^= (((uint32_t)1) << bitIndex);
+        return;
+    }
+
     x = (x & 0x1F80) >> 7;
     y = (y & 0x1F80) >> 1;
 

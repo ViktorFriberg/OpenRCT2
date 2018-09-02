@@ -577,6 +577,13 @@ void window_staff_overview_dropdown(rct_window* w, rct_widgetindex widgetIndex, 
         {
             gStaffPatrolAreas[peep->staff_id * STAFF_PATROL_AREA_SIZE + i] = 0;
         }
+        if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+        {
+            for (int32_t i = 0; i < STAFF_PATROL_AREA_TILESPECIFIC_SIZE; i++)
+            {
+                gStaffTilePatrolAreas[peep->staff_id * STAFF_PATROL_AREA_TILESPECIFIC_SIZE + i] = 0;
+            }
+        }
         gStaffModes[peep->staff_id] &= ~2;
 
         gfx_invalidate_screen();

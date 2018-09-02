@@ -17,6 +17,7 @@
 // The number of elements in the gStaffPatrolAreas array per staff member. Every bit in the array represents a 4x4 square.
 // Right now, it's a 32-bit array like in RCT2. 32 * 128 = 4096 bits, which is also the number of 4x4 squares on a 256x256 map.
 #define STAFF_PATROL_AREA_SIZE 128
+#define STAFF_PATROL_AREA_TILESPECIFIC_SIZE 2048 //(256 * 256 / 32)
 
 enum STAFF_MODE
 {
@@ -65,6 +66,7 @@ enum ENTERTAINER_COSTUME
 extern const rct_string_id StaffCostumeNames[ENTERTAINER_COSTUME_COUNT];
 
 extern uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
+extern uint32_t* gStaffTilePatrolAreas;
 extern uint8_t gStaffModes[STAFF_MAX_COUNT + STAFF_TYPE_COUNT];
 extern uint16_t gStaffDrawPatrolAreas;
 extern colour_t gStaffHandymanColour;
