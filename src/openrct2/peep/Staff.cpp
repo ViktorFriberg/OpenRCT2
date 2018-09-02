@@ -404,6 +404,12 @@ static constexpr const bool peep_slow_walking_types[] = {
     true,  // PEEP_SPRITE_TYPE_BALLOON
 };
 
+static int16_t s_latest_staff_patrol_apply_TileX = -1
+, s_latest_staff_patrol_apply_TileY = -1
+, s_latest_staff_patrol_apply_spriteID = MAX_SPRITES
+, s_latest_staff_patrol_apply_value = -1;
+
+
 /**
  *
  *  rct2: 0x006C0BB5
@@ -523,8 +529,36 @@ void game_command_set_staff_patrol(
             delete[] gStaffTilePatrolAreas;
             gStaffTilePatrolAreas = nullptr;
         }
+
         rct_peep* peep = &sprite->peep;
+        if (s_latest_staff_patrol_apply_value == -1)
+        {
         staff_toggle_patrol_area(peep->staff_id, x, y);
+            if (staff_is_patrol_area_set(peep->staff_id, x, y) == true)
+                s_latest_staff_patrol_apply_value = 1;
+            else
+                s_latest_staff_patrol_apply_value = 0;
+        }
+        else if (s_latest_staff_patrol_apply_value == 0)
+        {
+            staff_set_patrol_area(peep->staff_id, x, y, false);
+        }
+        else if (s_latest_staff_patrol_apply_value == 1)
+        {
+            staff_set_patrol_area(peep->staff_id, x, y, true);
+        }
+
+        if (gConfigGeneral.tilespecific_staff_patrolling == true)
+        {
+            s_latest_staff_patrol_apply_TileX = x >> 5;
+            s_latest_staff_patrol_apply_TileY = y >> 5;
+        }
+        else
+        {
+            s_latest_staff_patrol_apply_TileX = x >> 7;
+            s_latest_staff_patrol_apply_TileY = y >> 7;
+        }
+        s_latest_staff_patrol_apply_spriteID = sprite_id;
 
         int32_t ispatrolling = 0;
         if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
@@ -560,6 +594,38 @@ void game_command_set_staff_patrol(
         staff_update_greyed_patrol_areas();
     }
     *ebx = 0;
+}
+
+void staff_mouse_feedback_hold_down(int16_t mapX, int16_t mapY)
+{
+    if (s_latest_staff_patrol_apply_spriteID == MAX_SPRITES) return;
+    if (gConfigGeneral.tilespecific_staff_patrolling == true)
+    {
+        if ((mapX >> 5) == s_latest_staff_patrol_apply_TileX && (mapY >> 5) == s_latest_staff_patrol_apply_TileY)
+            return;//We already processed this tile previously...
+        s_latest_staff_patrol_apply_TileX = mapX >> 5;
+        s_latest_staff_patrol_apply_TileY = mapY >> 5;
+    }
+    else
+    {
+        if ((mapX >> 7) == s_latest_staff_patrol_apply_TileX && (mapY >> 7) == s_latest_staff_patrol_apply_TileY)
+            return;//We already processed this tile previously...
+        s_latest_staff_patrol_apply_TileX = mapX >> 7;
+        s_latest_staff_patrol_apply_TileY = mapY >> 7;
+    }
+    int32_t mapX32 = mapX, mapY32 = mapY;
+    int32_t ebx = GAME_COMMAND_FLAG_APPLY;
+    int32_t esi = 0, edi = 0, ebp = 0;
+    int32_t spriteID = s_latest_staff_patrol_apply_spriteID;
+    game_command_set_staff_patrol(&mapX32, &ebx, &mapY32, &spriteID, &esi, &edi, &ebp);
+}
+
+void staff_mouse_feedback_up(int16_t mapX, int16_t mapY)
+{
+    s_latest_staff_patrol_apply_TileX = -1;
+    s_latest_staff_patrol_apply_TileY = -1;
+    s_latest_staff_patrol_apply_spriteID = MAX_SPRITES;
+    s_latest_staff_patrol_apply_value = -1;
 }
 
 /**

@@ -32,6 +32,7 @@
 #include <openrct2/world/Map.h>
 #include <openrct2/world/Scenery.h>
 #include <openrct2/world/Sprite.h>
+#include <openrct2/peep/Staff.h>
 
 struct rct_mouse_data
 {
@@ -375,6 +376,14 @@ static void game_handle_input_mouse(int32_t x, int32_t y, int32_t state)
             switch (state)
             {
                 case MOUSE_STATE_RELEASED:
+                    {
+                        int16_t mapX, mapY;
+                        int32_t interactionType;
+                        rct_tile_element* tileElement;
+                        rct_viewport* viewPort;
+                        get_map_coordinates_from_pos_window(w, x, y, 0, &mapX, &mapY, &interactionType, &tileElement, &viewPort);
+                        staff_mouse_feedback_hold_down(mapX, mapY);
+                    }
                     if (w->viewport == nullptr)
                     {
                         _inputState = INPUT_STATE_RESET;
@@ -396,6 +405,14 @@ static void game_handle_input_mouse(int32_t x, int32_t y, int32_t state)
                     window_event_tool_drag_call(w, gCurrentToolWidget.widget_index, x, y);
                     break;
                 case MOUSE_STATE_LEFT_RELEASE:
+                    {
+                        int16_t mapX, mapY;
+                        int32_t interactionType;
+                        rct_tile_element* tileElement;
+                        rct_viewport* viewPort;
+                        get_map_coordinates_from_pos_window(w, x, y, 0, &mapX, &mapY, &interactionType, &tileElement, &viewPort);
+                        staff_mouse_feedback_up(mapX, mapY);
+                    }
                     _inputState = INPUT_STATE_RESET;
                     if (_dragWidget.window_number == w->number)
                     {
