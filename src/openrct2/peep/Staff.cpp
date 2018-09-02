@@ -483,8 +483,6 @@ void game_command_set_staff_patrol(
             log_warning("Invalid type of sprite %u for game command", sprite_id);
             return;
         }
-        rct_peep* peep = &sprite->peep;
-        int32_t patrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
 
         if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas == nullptr)
         {
@@ -525,12 +523,25 @@ void game_command_set_staff_patrol(
             delete[] gStaffTilePatrolAreas;
             gStaffTilePatrolAreas = nullptr;
         }
+        rct_peep* peep = &sprite->peep;
         staff_toggle_patrol_area(peep->staff_id, x, y);
 
         int32_t ispatrolling = 0;
+        if (gConfigGeneral.tilespecific_staff_patrolling == true && gStaffTilePatrolAreas != nullptr)
+        {
+            int32_t patrolOffset = peep->staff_id * STAFF_PATROL_AREA_TILESPECIFIC_SIZE;
+            for (int32_t i = 0; i < STAFF_PATROL_AREA_TILESPECIFIC_SIZE; i++)
+            {
+                ispatrolling |= gStaffTilePatrolAreas[patrolOffset + i];
+            }
+        }
+        else
+        {
+            int32_t patrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
         for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
         {
             ispatrolling |= gStaffPatrolAreas[patrolOffset + i];
+        }
         }
 
         gStaffModes[peep->staff_id] &= ~2;
