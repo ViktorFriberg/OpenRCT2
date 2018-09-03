@@ -86,6 +86,8 @@ void game_command_set_staff_name(
 void game_command_pickup_staff(
     int32_t* eax, int32_t* ebx, int32_t* ecx, int32_t* edx, int32_t* esi, int32_t* edi, int32_t* ebp);
 
+rct_peep* staff_get_peep_from_sprite_id(uint16_t sprite_id);
+
 void staff_reset_modes();
 void staff_set_name(uint16_t spriteIndex, const char* name);
 uint16_t hire_new_staff_member(uint8_t staffType);

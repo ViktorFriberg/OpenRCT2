@@ -63,6 +63,22 @@ colour_t gStaffHandymanColour;
 colour_t gStaffMechanicColour;
 colour_t gStaffSecurityColour;
 
+rct_peep* staff_get_peep_from_sprite_id(uint16_t sprite_id)
+{
+    if (sprite_id >= MAX_SPRITES)
+    {
+        log_warning("Invalid sprite id %u", sprite_id);
+        return nullptr;
+    }
+    rct_sprite* sprite = get_sprite(sprite_id);
+    if (sprite->unknown.sprite_identifier != SPRITE_IDENTIFIER_PEEP || sprite->peep.type != PEEP_TYPE_STAFF)
+    {
+        log_warning("Invalid type of sprite %u", sprite_id);
+        return nullptr;
+    }
+    return &sprite->peep;
+}
+
 /**
  *
  *  rct2: 0x006BD3A4
