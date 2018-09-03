@@ -3,6 +3,7 @@
 - Feature: [#7956, #7964] Add sprite font glyphs for Hungarian and some Czech letters.
 - Improved: [#7930] Automatically create folders for custom content.
 - Removed: [#7929] Support for scenario text objects.
+- Fix: [#2940] Fixed so that the staff patrol areas can be mouse-painted.
 
 0.2.1 (2018-08-26)
 ------------------------------------------------------------------------

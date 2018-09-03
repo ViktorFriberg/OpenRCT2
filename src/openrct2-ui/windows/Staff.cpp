@@ -137,6 +137,8 @@ static void window_staff_overview_paint(rct_window *w, rct_drawpixelinfo *dpi);
 static void window_staff_overview_tab_paint(rct_window* w, rct_drawpixelinfo* dpi);
 static void window_staff_overview_tool_update(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y);
 static void window_staff_overview_tool_down(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y);
+static void window_staff_overview_tool_drag(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y);
+static void window_staff_overview_tool_up(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y);
 static void window_staff_overview_tool_abort(rct_window *w, rct_widgetindex widgetIndex);
 static void window_staff_overview_text_input(rct_window *w, rct_widgetindex widgetIndex, char *text);
 static void window_staff_overview_viewport_rotate(rct_window *w);
@@ -171,8 +173,8 @@ static rct_window_event_list window_staff_overview_events = {
     nullptr,
     window_staff_overview_tool_update,
     window_staff_overview_tool_down,
-    nullptr,
-    nullptr,
+    window_staff_overview_tool_drag,
+    window_staff_overview_tool_up,
     window_staff_overview_tool_abort,
     nullptr,
     nullptr,
@@ -289,6 +291,8 @@ static constexpr const uint32_t window_staff_page_enabled_widgets[] = {
 // clang-format on
 
 static uint8_t _availableCostumes[ENTERTAINER_COSTUME_COUNT];
+
+static int32_t s_staff_patrol_area_paint_value = -1;
 
 /**
  *
@@ -1196,8 +1200,52 @@ void window_staff_overview_tool_down(rct_window* w, rct_widgetindex widgetIndex,
         if (dest_x == LOCATION_NULL)
             return;
 
+        rct_peep* peep = staff_get_peep_from_sprite_id(w->number);
+        if (peep == nullptr)
+            return;
+
         game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
+        if (staff_is_patrol_area_set(peep->staff_id, dest_x, dest_y) == true)
+        {
+            s_staff_patrol_area_paint_value = 1;
+        }
+        else
+        {
+            s_staff_patrol_area_paint_value = 0;
+        }
     }
+}
+
+void window_staff_overview_tool_drag(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y)
+{
+    if (widgetIndex != WIDX_PATROL)
+        return;
+
+    int32_t dest_x, dest_y;
+    footpath_get_coordinates_from_pos(x, y, &dest_x, &dest_y, nullptr, nullptr);
+
+    if (dest_x == LOCATION_NULL)
+        return;
+
+    rct_peep* peep = staff_get_peep_from_sprite_id(w->number);
+    if (peep == nullptr)
+        return;
+
+    bool patrolAreaValue = staff_is_patrol_area_set(peep->staff_id, dest_x, dest_y);
+    if (s_staff_patrol_area_paint_value == 1 && patrolAreaValue == true)
+        return; // Since area is already the value we want, skip...
+    if (s_staff_patrol_area_paint_value == 0 && patrolAreaValue == false)
+        return; // Since area is already the value we want, skip...
+
+    game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
+}
+
+void window_staff_overview_tool_up(rct_window* w, rct_widgetindex widgetIndex, int32_t x, int32_t y)
+{
+    if (widgetIndex != WIDX_PATROL)
+        return;
+
+    s_staff_patrol_area_paint_value = -1;
 }
 
 /**
