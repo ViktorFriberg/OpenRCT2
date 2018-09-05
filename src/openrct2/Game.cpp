@@ -104,6 +104,91 @@ rct_string_id gGameCommandErrorText;
 uint8_t gErrorType;
 rct_string_id gErrorStringId;
 
+struct GameCommandTrigger
+{
+    enum TriggerType
+    {
+        TRIGGER_ON_COMMAND = 0, // Always active
+        TRIGGER_ON_EAX = 0x1,
+        TRIGGER_ON_EBX = 0x2,
+        TRIGGER_ON_ECX = 0x4,
+        TRIGGER_ON_EDX = 0x8,
+        TRIGGER_AUTO_REMOVE = 0x1000,
+    };
+    uint32_t m_TriggerType;
+
+    uint32_t m_Command;
+    int32_t m_eax, m_ebx, m_ecx, m_edx;
+    uint32_t* m_TriggerFlagPointer;
+};
+static std::vector<GameCommandTrigger> _gameCommandTriggers;
+void game_command_add_single_trigger_on(uint32_t command, int32_t* eax, int32_t* ebx, int32_t* ecx, int32_t* edx, uint32_t* triggerFlagPointer)
+{
+    GameCommandTrigger newTrigger;
+    newTrigger.m_TriggerType = GameCommandTrigger::TRIGGER_AUTO_REMOVE;
+    newTrigger.m_Command = command;
+    if (eax != nullptr)
+    {
+        newTrigger.m_eax = *eax;
+        newTrigger.m_TriggerType |= GameCommandTrigger::TRIGGER_ON_EAX;
+    }
+    if (ebx != nullptr)
+    {
+        newTrigger.m_ebx = *ebx;
+        newTrigger.m_TriggerType |= GameCommandTrigger::TRIGGER_ON_EBX;
+    }
+    if (ecx != nullptr)
+    {
+        newTrigger.m_ecx = *ecx;
+        newTrigger.m_TriggerType |= GameCommandTrigger::TRIGGER_ON_ECX;
+    }
+    if (edx != nullptr)
+    {
+        newTrigger.m_edx = *edx;
+        newTrigger.m_TriggerType |= GameCommandTrigger::TRIGGER_ON_EDX;
+    }
+    newTrigger.m_TriggerFlagPointer = triggerFlagPointer;
+    _gameCommandTriggers.push_back(newTrigger);
+}
+void game_command_process_triggers(uint32_t command, int32_t* eax, int32_t* ebx, int32_t* ecx, int32_t* edx, int32_t* esi, int32_t* edi, int32_t* ebp)
+{
+    for (int i = 0; i < _gameCommandTriggers.size(); ++i)
+    {
+        if (_gameCommandTriggers[i].m_Command == command)
+        {
+            if (_gameCommandTriggers[i].m_TriggerType & GameCommandTrigger::TRIGGER_ON_EAX
+                && *eax != _gameCommandTriggers[i].m_eax)
+            {
+                continue; // This is not a match...
+            }
+            if (_gameCommandTriggers[i].m_TriggerType & GameCommandTrigger::TRIGGER_ON_EBX
+                && *ebx != _gameCommandTriggers[i].m_ebx)
+            {
+                continue; // This is not a match...
+            }
+            if (_gameCommandTriggers[i].m_TriggerType & GameCommandTrigger::TRIGGER_ON_ECX
+                && *ecx != _gameCommandTriggers[i].m_ecx)
+            {
+                continue; // This is not a match...
+            }
+            if (_gameCommandTriggers[i].m_TriggerType & GameCommandTrigger::TRIGGER_ON_EDX
+                && *edx != _gameCommandTriggers[i].m_edx)
+            {
+                continue; // This is not a match...
+            }
+
+            // If we reach this point we found a match!
+            ++(*_gameCommandTriggers[i].m_TriggerFlagPointer);
+            if (_gameCommandTriggers[i].m_TriggerType & GameCommandTrigger::TRIGGER_AUTO_REMOVE)
+            {
+                _gameCommandTriggers.erase(_gameCommandTriggers.begin() + i);
+                --i; // Since we erased the one we are processing we need to reprocess index nr i
+                continue;
+            }
+        }
+    }
+}
+
 using namespace OpenRCT2;
 
 int32_t game_command_callback_get_index(GAME_COMMAND_CALLBACK_POINTER* callback)
@@ -469,6 +554,7 @@ int32_t game_do_command_p(
 
             // Second call to actually perform the operation
             new_game_command_table[command](eax, ebx, ecx, edx, esi, edi, ebp);
+            game_command_process_triggers(command, eax, ebx, ecx, edx, esi, edi, ebp);
 
             // Do the callback (required for multiplayer to work correctly), but only for top level commands
             if (gGameCommandNestLevel == 1)

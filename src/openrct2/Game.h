@@ -159,6 +159,8 @@ void game_create_windows();
 void reset_all_sprite_quadrant_placements();
 void update_palette_effects();
 
+void game_command_add_single_trigger_on(uint32_t command, int32_t* eax, int32_t* ebx, int32_t* ecx, int32_t* edx, uint32_t* triggerFlag);
+
 int32_t game_do_command(int32_t eax, int32_t ebx, int32_t ecx, int32_t edx, int32_t esi, int32_t edi, int32_t ebp);
 int32_t game_do_command_p(
     uint32_t command, int32_t* eax, int32_t* ebx, int32_t* ecx, int32_t* edx, int32_t* esi, int32_t* edi, int32_t* ebp);
