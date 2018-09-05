@@ -294,6 +294,7 @@ static constexpr const uint32_t window_staff_page_enabled_widgets[] = {
 static uint8_t _availableCostumes[ENTERTAINER_COSTUME_COUNT];
 
 static int32_t _staffPatrolAreaPaintValue = -1;
+static uint32_t _staffPatrolAreaCommandExecutedFlag = 0;
 
 /**
  *
@@ -1217,6 +1218,11 @@ void window_staff_overview_tool_down(rct_window* w, rct_widgetindex widgetIndex,
         {
             _staffPatrolAreaPaintValue = 1;
         }
+
+        _staffPatrolAreaCommandExecutedFlag = 0;
+        int32_t spriteID = w->number;
+        game_command_add_single_trigger_on(GAME_COMMAND_SET_STAFF_PATROL, &dest_x, nullptr, &dest_y, &spriteID, &_staffPatrolAreaCommandExecutedFlag);
+
         game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
     }
 }
@@ -1251,6 +1257,12 @@ void window_staff_overview_tool_drag(rct_window* w, rct_widgetindex widgetIndex,
         return; // Since area is already the value we want, skip...
     if (_staffPatrolAreaPaintValue == 0 && patrolAreaValue == false)
         return; // Since area is already the value we want, skip...
+    if (_staffPatrolAreaCommandExecutedFlag == 0)
+        return; // We have not yet executed the command we sent previously!
+
+    _staffPatrolAreaCommandExecutedFlag = 0;
+    int32_t spriteID = w->number;
+    game_command_add_single_trigger_on(GAME_COMMAND_SET_STAFF_PATROL, &dest_x, nullptr, &dest_y, &spriteID, &_staffPatrolAreaCommandExecutedFlag);
 
     game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
 }
