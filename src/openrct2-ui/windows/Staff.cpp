@@ -1204,15 +1204,15 @@ void window_staff_overview_tool_down(rct_window* w, rct_widgetindex widgetIndex,
         if (peep == nullptr)
             return;
 
-        game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
         if (staff_is_patrol_area_set(peep->staff_id, dest_x, dest_y) == true)
-        {
-            _staffPatrolAreaPaintValue = 1;
-        }
-        else
         {
             _staffPatrolAreaPaintValue = 0;
         }
+        else
+        {
+            _staffPatrolAreaPaintValue = 1;
+        }
+        game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
     }
 }
 
