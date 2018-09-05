@@ -292,7 +292,7 @@ static constexpr const uint32_t window_staff_page_enabled_widgets[] = {
 
 static uint8_t _availableCostumes[ENTERTAINER_COSTUME_COUNT];
 
-static int32_t s_staff_patrol_area_paint_value = -1;
+static int32_t _staffPatrolAreaPaintValue = -1;
 
 /**
  *
@@ -1207,11 +1207,11 @@ void window_staff_overview_tool_down(rct_window* w, rct_widgetindex widgetIndex,
         game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
         if (staff_is_patrol_area_set(peep->staff_id, dest_x, dest_y) == true)
         {
-            s_staff_patrol_area_paint_value = 1;
+            _staffPatrolAreaPaintValue = 1;
         }
         else
         {
-            s_staff_patrol_area_paint_value = 0;
+            _staffPatrolAreaPaintValue = 0;
         }
     }
 }
@@ -1232,9 +1232,9 @@ void window_staff_overview_tool_drag(rct_window* w, rct_widgetindex widgetIndex,
         return;
 
     bool patrolAreaValue = staff_is_patrol_area_set(peep->staff_id, dest_x, dest_y);
-    if (s_staff_patrol_area_paint_value == 1 && patrolAreaValue == true)
+    if (_staffPatrolAreaPaintValue == 1 && patrolAreaValue == true)
         return; // Since area is already the value we want, skip...
-    if (s_staff_patrol_area_paint_value == 0 && patrolAreaValue == false)
+    if (_staffPatrolAreaPaintValue == 0 && patrolAreaValue == false)
         return; // Since area is already the value we want, skip...
 
     game_do_command(dest_x, 1, dest_y, w->number, GAME_COMMAND_SET_STAFF_PATROL, 0, 0);
@@ -1245,7 +1245,7 @@ void window_staff_overview_tool_up(rct_window* w, rct_widgetindex widgetIndex, i
     if (widgetIndex != WIDX_PATROL)
         return;
 
-    s_staff_patrol_area_paint_value = -1;
+    _staffPatrolAreaPaintValue = -1;
 }
 
 /**
