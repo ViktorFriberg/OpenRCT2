@@ -57,6 +57,48 @@ const rct_string_id StaffCostumeNames[] = {
 // Every staff member has STAFF_PATROL_AREA_SIZE elements assigned to in this array, indexed by their staff_id
 // Additionally there is a patrol area for each staff type, which is the union of the patrols of all staff members of that type
 uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
+StaffPatrolMetaDataSection* gStaffPatrolAreasMetaData = nullptr;
+
+struct StaffPatrolMetaData
+{
+    enum TileMode
+    {
+        STAFF_PATROL_AREA_TILEMODE_4X4 = 0, // Default (Enough for a 256x256 grid area)
+        STAFF_PATROL_AREA_TILEMODE_3X3 = 1, // Enough for a 192x192 grid area
+        STAFF_PATROL_AREA_TILEMODE_2X2 = 2, // Enough for a 128x128 grid area
+        STAFF_PATROL_AREA_TILEMODE_1X1 = 3, // Enough for a 64x64 grid area
+    };
+    uint8_t m_TileMode;
+    uint8_t m_UnusedPadding[3];
+    uint16_t m_OffsetX;
+    uint16_t m_OffsetY;
+};
+struct StaffPatrolMetaDataSection
+{
+    //uint32_t gStaffPatrolMeta[STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE];
+    //4 * 128 * 4 = 2048 bytes available
+    uint16_t m_MetaDataIdentifier; // Harcoded 0x5555, bit pattern 010101...
+    uint16_t m_MetaDataVersion; // Version
+    StaffPatrolMetaData m_StaffPatrolMetaData[STAFF_MAX_COUNT]; //8 * 200 = total 1600 bytes
+    uint32_t m_UnusedPadding[110];
+    uint32_t m_MetaDataCRC; // CRC of meta data section
+
+    void Initialize()
+    {
+        m_MetaDataIdentifier = 0x5555;
+        m_MetaDataVersion = 1;
+
+        memset(m_StaffPatrolMetaData, 0, sizeof(m_StaffPatrolMetaData));
+        for (int i = 0; i < STAFF_MAX_COUNT; ++i)
+        {
+            m_StaffPatrolMetaData[i].m_TileMode = StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4;
+        }
+        
+        m_MetaDataCRC = 0xFFFFFFFF; // Not implemented yet
+    }
+};
+static_assert(sizeof(StaffPatrolMetaDataSection) == STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE * sizeof(uint32_t), "StaffPatrolMetaDataSection is too large!");
+
 uint8_t gStaffModes[STAFF_MAX_COUNT + STAFF_TYPE_COUNT];
 uint16_t gStaffDrawPatrolAreas;
 colour_t gStaffHandymanColour;
