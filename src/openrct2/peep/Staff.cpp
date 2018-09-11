@@ -63,8 +63,9 @@ struct StaffPatrolMetaData
         STAFF_PATROL_AREA_TILEMODE_2X2 = 2, // Enough for a 128x128 grid area
         STAFF_PATROL_AREA_TILEMODE_1X1 = 3, // Enough for a 64x64 grid area
     };
-    uint8_t m_TileMode;
-    uint8_t m_UnusedPadding[3];
+    uint8_t m_TileMode; // TileMode
+    uint8_t m_UnusedPadding[2];
+    uint8_t m_StaffType; // STAFF_TYPE
     uint16_t m_OffsetX;
     uint16_t m_OffsetY;
 };
@@ -142,7 +143,6 @@ static_assert(sizeof(StaffPatrolMetaDataSection) == STAFF_TYPE_COUNT * STAFF_PAT
 // Every staff member has STAFF_PATROL_AREA_SIZE elements assigned to in this array, indexed by their staff_id
 // Additionally there is a patrol area for each staff type, which is the union of the patrols of all staff members of that type
 uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
-uint32_t gStaffPatrolGroupAreas[STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE];
 StaffPatrolMetaDataSection* gStaffPatrolAreasMetaData = nullptr;
 
 uint8_t gStaffModes[STAFF_MAX_COUNT + STAFF_TYPE_COUNT];
@@ -155,7 +155,9 @@ colour_t gStaffSecurityColour;
 void staff_patrol_area_meta_data_initialize(bool forceActivate)
 {
     // Test code
-    StaffPatrolMetaDataSection* metaData = (StaffPatrolMetaDataSection*)&gStaffPatrolAreas[STAFF_MAX_COUNT* STAFF_PATROL_AREA_SIZE];
+    StaffPatrolMetaDataSection* metaData = (StaffPatrolMetaDataSection*)&gStaffPatrolAreas[STAFF_MAX_COUNT * STAFF_PATROL_AREA_SIZE];
+    assert(((uint8_t*)metaData) + sizeof(StaffPatrolMetaDataSection) <= (uint8_t*)&gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE]);
+
     if (metaData->IsMetaData() == true)
     {
         if (metaData->IsMetaDataValid() == true)
@@ -697,28 +699,44 @@ uint16_t hire_new_staff_member(uint8_t staffType)
 void staff_update_greyed_patrol_areas()
 {
     if (gStaffPatrolAreasMetaData != nullptr)
-        return; // only do if patrol area meta data is not used
-    rct_peep* peep;
-
-    for (int32_t staff_type = 0; staff_type < STAFF_TYPE_COUNT; ++staff_type)
     {
-        int32_t staffPatrolOffset = (staff_type + STAFF_MAX_COUNT) * STAFF_PATROL_AREA_SIZE;
-        for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
-        {
-            gStaffPatrolAreas[staffPatrolOffset + i] = 0;
-        }
+        rct_peep* peep;
 
         for (uint16_t sprite_index = gSpriteListHead[SPRITE_LIST_PEEP]; sprite_index != SPRITE_INDEX_NULL;
-             sprite_index = peep->next)
+            sprite_index = peep->next)
         {
             peep = GET_PEEP(sprite_index);
 
-            if (peep->type == PEEP_TYPE_STAFF && staff_type == peep->staff_type)
+            if (peep->type == PEEP_TYPE_STAFF)
             {
-                int32_t peepPatrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
-                for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
+                gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[peep->staff_id].m_StaffType = peep->staff_type;
+            }
+        }
+    }
+    else
+    {
+        rct_peep* peep;
+
+        for (int32_t staff_type = 0; staff_type < STAFF_TYPE_COUNT; ++staff_type)
+        {
+            int32_t staffPatrolOffset = (staff_type + STAFF_MAX_COUNT) * STAFF_PATROL_AREA_SIZE;
+            for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
+            {
+                gStaffPatrolAreas[staffPatrolOffset + i] = 0;
+            }
+
+            for (uint16_t sprite_index = gSpriteListHead[SPRITE_LIST_PEEP]; sprite_index != SPRITE_INDEX_NULL;
+                sprite_index = peep->next)
+            {
+                peep = GET_PEEP(sprite_index);
+
+                if (peep->type == PEEP_TYPE_STAFF && staff_type == peep->staff_type)
                 {
-                    gStaffPatrolAreas[staffPatrolOffset + i] |= gStaffPatrolAreas[peepPatrolOffset + i];
+                    int32_t peepPatrolOffset = peep->staff_id * STAFF_PATROL_AREA_SIZE;
+                    for (int32_t i = 0; i < STAFF_PATROL_AREA_SIZE; i++)
+                    {
+                        gStaffPatrolAreas[staffPatrolOffset + i] |= gStaffPatrolAreas[peepPatrolOffset + i];
+                    }
                 }
             }
         }
@@ -1119,8 +1137,25 @@ public:
 
 bool staff_is_patrol_area_set(int32_t staffIndex, int32_t x, int32_t y)
 {
-    if (staffIndex >= STAFF_MAX_COUNT)
-        return false; //Temporary disabled!!!
+    if (gStaffPatrolAreasMetaData != nullptr && staffIndex >= STAFF_MAX_COUNT)
+    {
+        int32_t staffType = staffIndex - STAFF_MAX_COUNT;
+        for (int i = 0; i < STAFF_MAX_COUNT; ++i)
+        {
+            // Check if Patrolling active
+            if (gStaffModes[i] & 2)
+            {
+                // Check if relevant staff type
+                if (gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[i].m_StaffType == staffType)
+                {
+                    if (staff_is_patrol_area_set(i, x, y) == true)
+                        return true;
+                }
+            }
+        }
+
+        return false; // Found no staff with patrol area x,y set
+    }
 
     if (gStaffPatrolAreasMetaData == nullptr ||
         gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4)
@@ -1173,17 +1208,6 @@ void staff_set_patrol_area(int32_t staffIndex, int32_t x, int32_t y, bool value)
 
 void staff_toggle_patrol_area(int32_t staffIndex, int32_t x, int32_t y)
 {
-    if (gStaffPatrolAreasMetaData == nullptr)
-    {
-        // Test code
-        log_info("load staff patrol meta data...");
-        gStaffPatrolAreasMetaData = (StaffPatrolMetaDataSection*)&gStaffPatrolAreas[STAFF_MAX_COUNT* STAFF_PATROL_AREA_SIZE];
-        if (gStaffPatrolAreasMetaData->IsMetaData() == false)
-        {
-            log_info("initialize staff patrol meta data...");
-            gStaffPatrolAreasMetaData->Initialize(StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_1X1);
-        }
-    }
     if (gStaffPatrolAreasMetaData == nullptr ||
         gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4)
     {
