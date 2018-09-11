@@ -208,6 +208,7 @@ public:
         // game_convert_strings_to_utf8();
         game_convert_news_items_to_utf8();
         map_count_remaining_land_rights();
+        staff_patrol_area_meta_data_initialize();
     }
 
     bool GetDetails(scenario_index_entry* dst) override

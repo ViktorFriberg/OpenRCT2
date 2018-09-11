@@ -54,11 +54,6 @@ const rct_string_id StaffCostumeNames[] = {
 };
 // clang-format on
 
-// Every staff member has STAFF_PATROL_AREA_SIZE elements assigned to in this array, indexed by their staff_id
-// Additionally there is a patrol area for each staff type, which is the union of the patrols of all staff members of that type
-uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
-StaffPatrolMetaDataSection* gStaffPatrolAreasMetaData = nullptr;
-
 struct StaffPatrolMetaData
 {
     enum TileMode
@@ -75,15 +70,21 @@ struct StaffPatrolMetaData
 };
 struct StaffPatrolMetaDataSection
 {
-    //uint32_t gStaffPatrolMeta[STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE];
-    //4 * 128 * 4 = 2048 bytes available
-    uint16_t m_MetaDataIdentifier; // Harcoded 0x5555, bit pattern 010101...
-    uint16_t m_MetaDataVersion; // Version
-    StaffPatrolMetaData m_StaffPatrolMetaData[STAFF_MAX_COUNT]; //8 * 200 = total 1600 bytes
-    uint32_t m_UnusedPadding[110];
-    uint32_t m_MetaDataCRC; // CRC of meta data section
+    union
+    {
+        uint32_t _StaffPatrolMeta[STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE];
+        struct
+        {
+            //4 * 128 * 4 = 2048 bytes available
+            uint16_t m_MetaDataIdentifier; // Harcoded 0x5555, bit pattern 010101...
+            uint16_t m_MetaDataVersion; // Version
+            StaffPatrolMetaData m_StaffPatrolMetaData[STAFF_MAX_COUNT]; //8 * 200 = total 1600 bytes
+            uint32_t m_UnusedPadding[110];
+            uint32_t m_MetaDataCRC; // CRC of meta data section
+        };
+    };
 
-    void Initialize()
+    void Initialize(uint8_t defaultTileMode = StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4)
     {
         m_MetaDataIdentifier = 0x5555;
         m_MetaDataVersion = 1;
@@ -91,19 +92,93 @@ struct StaffPatrolMetaDataSection
         memset(m_StaffPatrolMetaData, 0, sizeof(m_StaffPatrolMetaData));
         for (int i = 0; i < STAFF_MAX_COUNT; ++i)
         {
-            m_StaffPatrolMetaData[i].m_TileMode = StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4;
+            m_StaffPatrolMetaData[i].m_TileMode = defaultTileMode;
+            m_StaffPatrolMetaData[i].m_OffsetX = 0;
+            m_StaffPatrolMetaData[i].m_OffsetY = 0;
         }
-        
-        m_MetaDataCRC = 0xFFFFFFFF; // Not implemented yet
+        for (int i = 0; i < 110; ++i)
+        {
+            m_UnusedPadding[i] = 0x77553311;
+        }
+
+        m_MetaDataCRC = 0xFFFFFFFF;
+    }
+    uint32_t CalculateCRC()
+    {
+        int dataCount = (STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE) - 1; // -1 because we skip the last metadata uint32_t
+        uint32_t calcCRCvalue = 0;
+        for (int i = 0; i < dataCount; ++i)
+        {
+            calcCRCvalue += _StaffPatrolMeta[i];
+        }
+        return calcCRCvalue;
+    }
+    void UpdateCRC()
+    {
+        m_MetaDataCRC = CalculateCRC();
+    }
+    bool IsMetaData()
+    {
+        if (m_MetaDataIdentifier != 0x5555)
+            return false;
+
+        for (int i = 0; i < 110; ++i)
+        {
+            if (m_UnusedPadding[i] != 0x77553311)
+                return false;
+        }
+        return true;
+    }
+    bool IsMetaDataValid()
+    {
+        if (m_MetaDataCRC != CalculateCRC())
+            return false;
+
+        return true;
     }
 };
 static_assert(sizeof(StaffPatrolMetaDataSection) == STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE * sizeof(uint32_t), "StaffPatrolMetaDataSection is too large!");
+
+// Every staff member has STAFF_PATROL_AREA_SIZE elements assigned to in this array, indexed by their staff_id
+// Additionally there is a patrol area for each staff type, which is the union of the patrols of all staff members of that type
+uint32_t gStaffPatrolAreas[(STAFF_MAX_COUNT + STAFF_TYPE_COUNT) * STAFF_PATROL_AREA_SIZE];
+uint32_t gStaffPatrolGroupAreas[STAFF_TYPE_COUNT * STAFF_PATROL_AREA_SIZE];
+StaffPatrolMetaDataSection* gStaffPatrolAreasMetaData = nullptr;
 
 uint8_t gStaffModes[STAFF_MAX_COUNT + STAFF_TYPE_COUNT];
 uint16_t gStaffDrawPatrolAreas;
 colour_t gStaffHandymanColour;
 colour_t gStaffMechanicColour;
 colour_t gStaffSecurityColour;
+
+
+void staff_patrol_area_meta_data_initialize(bool forceActivate)
+{
+    // Test code
+    StaffPatrolMetaDataSection* metaData = (StaffPatrolMetaDataSection*)&gStaffPatrolAreas[STAFF_MAX_COUNT* STAFF_PATROL_AREA_SIZE];
+    if (metaData->IsMetaData() == true)
+    {
+        if (metaData->IsMetaDataValid() == true)
+        {
+            log_info("found valid staff patrol meta data!");
+            gStaffPatrolAreasMetaData = metaData;
+        }
+        else
+        {
+            log_info("todo error message!!! CRC is invalid!!!");
+        }
+    }
+    else if(forceActivate == true)
+    {
+        log_info("activate staff patrol meta data...");
+        metaData->Initialize(StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_1X1);
+        gStaffPatrolAreasMetaData = metaData;
+    }
+    else
+    {
+        log_info("no staff patrol meta data...");
+    }
+}
 
 /**
  *
@@ -621,6 +696,8 @@ uint16_t hire_new_staff_member(uint8_t staffType)
  */
 void staff_update_greyed_patrol_areas()
 {
+    if (gStaffPatrolAreasMetaData != nullptr)
+        return; // only do if patrol area meta data is not used
     rct_peep* peep;
 
     for (int32_t staff_type = 0; staff_type < STAFF_TYPE_COUNT; ++staff_type)
@@ -863,15 +940,216 @@ void staff_reset_stats()
     }
 }
 
+
+uint32_t numberOfSetBits(uint32_t i)
+{
+    // Java: use >>> instead of >>
+    // C or C++: use uint32_t
+    i = i - ((i >> 1) & 0x55555555);
+    i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+    return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
+
+template<int T_SizeX, int T_SizeY>
+class BitArray
+{
+public:
+    static const int DataArrayLength = T_SizeX * T_SizeY / 32;
+    uint32_t m_Data[DataArrayLength];
+    int GetBitValue(int x, int y) const
+    {
+        int32_t dataOffset = ((x * T_SizeY) | y) >> 5; // (tileX * 64(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = y & 0x1F;                   // 0..32
+        return (m_Data[dataOffset] >> bitIndex) & 0x1;
+    }
+    int GetAnyBitSetRangeY(int x, int yMin, int yMax) const
+    {
+        if (yMin == yMax)
+            return GetBitValue(x, yMin);
+
+        int32_t dataOffsetMin = ((x * T_SizeY) | yMin) >> 5;
+        int32_t dataOffsetMax = ((x * T_SizeY) | yMax) >> 5;
+        if (dataOffsetMin == dataOffsetMax)
+        {
+            if (m_Data[dataOffsetMin] == 0)
+                return 0; // Early exit case
+
+            int32_t bitIndex = yMin & 0x1F; // 0..32
+            uint32_t bitCompareValue = 0;
+            for (int i = bitIndex; i <= (yMax & 0x1F); ++i)
+            {
+                bitCompareValue = (bitCompareValue << 1) | 1;
+            }
+            if (((m_Data[dataOffsetMin] >> bitIndex) & bitCompareValue) != 0)
+                return 1;
+        }
+        else
+        {
+            for (int32_t i = dataOffsetMin + 1; i < dataOffsetMax; ++i)
+            {
+                if (m_Data[i] != 0) return 1; // Early exit case
+            }
+
+            int32_t bitIndex = yMin & 0x1F; // 0..32
+            uint32_t bitCompareValue = 0;
+            for (int i = bitIndex; i < 0x1F; ++i)
+            {
+                bitCompareValue = (bitCompareValue << 1) | 1;
+            }
+            if (((m_Data[dataOffsetMin] >> bitIndex) & bitCompareValue) != 0)
+                return 1;
+
+            bitIndex = 0; // 0..32
+            bitCompareValue = 0;
+            for (int i = 0; i <= (yMax & 0x1F); ++i)
+            {
+                bitCompareValue = (bitCompareValue << 1) | 1;
+            }
+            if (((m_Data[dataOffsetMin] >> bitIndex) & bitCompareValue) != 0)
+                return 1;
+        }
+        return 0;
+    }
+    int GetAnyBitSetRangeXY(int xMin, int yMin, int xMax, int yMax) const
+    {
+        for (int x = xMin; x <= xMax; ++x)
+        {
+            if (GetAnyBitSetRangeY(x, yMin, yMax) != 0)
+                return 1;
+        }
+        return 0;
+    }
+    int GetAnyBitSet() const
+    {
+        for (int i = 0; i < DataArrayLength; ++i)
+        {
+            if (m_Data[i] != 0)
+                return 1;
+        }
+        return 0;
+    }
+    void SetBit(int x, int y)
+    {
+        int32_t dataOffset = ((x * T_SizeY) | y) >> 5; // (tileX * 64(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = y & 0x1F;                   // 0..32
+        m_Data[dataOffset] |= (((uint32_t)1) << bitIndex);
+    }
+    void UnsetBit(int x, int y)
+    {
+        int32_t dataOffset = ((x * T_SizeY) | y) >> 5; // (tileX * 64(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = y & 0x1F;                   // 0..32
+        m_Data[dataOffset] &= ~(((uint32_t)1) << bitIndex);
+    }
+    void ToggleBit(int x, int y)
+    {
+        int32_t dataOffset = ((x * T_SizeY) | y) >> 5; // (tileX * 64(MAX_Y) + Y) / 32(BITS/CHUNK)
+        int32_t bitIndex = y & 0x1F;                   // 0..32
+        m_Data[dataOffset] ^= (((uint32_t)1) << bitIndex);
+    }
+    void AssignData(const BitArray& data)
+    {
+        for (int i = 0; i < DataArrayLength; ++i)
+        {
+            m_Data[i] = data.m_Data[i];
+        }
+    }
+    //void AssignData(const BitArray& data, int xOffset, int yOffset)
+    //{
+    //    // Unset all bits
+    //    for (int i = 0; i < DataArrayLength; ++i)
+    //    {
+    //        m_Data[i] = 0;
+    //    }
+
+    //    // Copy bits that are set
+    //    for (int x = 0; x < T_SizeX; ++x)
+    //    {
+    //        for (int y = 0; y < T_SizeY; ++y)
+    //        {
+    //            if (xOffset + x < T_SizeX && yOffset + y < T_SizeY)
+    //            {
+    //                if(data.GetBitValue(xOffset + x, yOffset + y) != 0)
+    //                {
+    //                    SetBit(x, y);
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
+    template<int T_OtherSizeX, int T_OtherSizeY>
+    void AssignData(const BitArray<T_OtherSizeX, T_OtherSizeY>& data, int xOffset, int yOffset)
+    {
+        // Unset all bits
+        for (int i = 0; i < DataArrayLength; ++i)
+        {
+            m_Data[i] = 0;
+        }
+
+        // Copy bits that are set
+        for (int x = 0; x < T_SizeX; ++x)
+        {
+            for (int y = 0; y < T_SizeY; ++y)
+            {
+                if (xOffset + x >= 0 && yOffset + y >= 0 &&
+                    xOffset + x < T_OtherSizeX  && yOffset + y < T_OtherSizeY)
+                {
+                    if (data.GetBitValue(xOffset + x, yOffset + y) != 0)
+                    {
+                        SetBit(x, y);
+                    }
+                }
+            }
+        }
+    }
+    template<int T_Size>
+    static BitArray* AccessAsBitArray(uint32_t(&data)[T_Size])
+    {
+        static_assert(T_Size == T_SizeX * T_SizeY / 32, "Input data array must be same size as BitArray!");
+        static_assert(T_Size * 4 == sizeof(BitArray), "Input data array must be same size as BitArray!");
+        return reinterpret_cast<BitArray<T_SizeX, T_SizeY>*>(data);
+    }
+    static BitArray* AccessAsBitArray(uint32_t* data, int dataArrayLength)
+    {
+        assert(dataArrayLength == T_SizeX * T_SizeY / 32);
+        assert(dataArrayLength * 4 == sizeof(BitArray));
+        return reinterpret_cast<BitArray<T_SizeX, T_SizeY>*>(data);
+    }
+};
+
+
 bool staff_is_patrol_area_set(int32_t staffIndex, int32_t x, int32_t y)
 {
-    x = (x & 0x1F80) >> 7;
-    y = (y & 0x1F80) >> 1;
+    if (staffIndex >= STAFF_MAX_COUNT)
+        return false; //Temporary disabled!!!
 
-    int32_t peepOffset = staffIndex * STAFF_PATROL_AREA_SIZE;
-    int32_t offset = (x | y) >> 5;
-    int32_t bitIndex = (x | y) & 0x1F;
-    return gStaffPatrolAreas[peepOffset + offset] & (((uint32_t)1) << bitIndex);
+    if (gStaffPatrolAreasMetaData == nullptr ||
+        gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4)
+    {
+        x = (x & 0x1F80) >> 7;
+        y = (y & 0x1F80) >> 1;
+
+        int32_t peepOffset = staffIndex * STAFF_PATROL_AREA_SIZE;
+        int32_t offset = (x | y) >> 5;
+        int32_t bitIndex = (x | y) & 0x1F;
+        return gStaffPatrolAreas[peepOffset + offset] & (((uint32_t)1) << bitIndex);
+    }
+    else if (gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_1X1)
+    {
+        int32_t tileX = (x & 0x1FE0) >> 5; // 0..256
+        int32_t tileY = (y & 0x1FE0) >> 5; // 0..256
+
+        auto& metaData = gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex];
+        tileX -= metaData.m_OffsetX;
+        tileY -= metaData.m_OffsetY;
+        if (tileX < 0 || tileX >= 64 || tileY < 0 || tileY >= 64)
+            return false; // Early exit... Outside of the grid
+
+        auto activeData = BitArray<64, 64>::AccessAsBitArray(&gStaffPatrolAreas[staffIndex * STAFF_PATROL_AREA_SIZE], STAFF_PATROL_AREA_SIZE);
+        if (activeData->GetBitValue(tileX, tileY) == 1)
+            return true;
+        return false;
+    }
+    return false;
 }
 
 void staff_set_patrol_area(int32_t staffIndex, int32_t x, int32_t y, bool value)
@@ -895,13 +1173,97 @@ void staff_set_patrol_area(int32_t staffIndex, int32_t x, int32_t y, bool value)
 
 void staff_toggle_patrol_area(int32_t staffIndex, int32_t x, int32_t y)
 {
-    x = (x & 0x1F80) >> 7;
-    y = (y & 0x1F80) >> 1;
+    if (gStaffPatrolAreasMetaData == nullptr)
+    {
+        // Test code
+        log_info("load staff patrol meta data...");
+        gStaffPatrolAreasMetaData = (StaffPatrolMetaDataSection*)&gStaffPatrolAreas[STAFF_MAX_COUNT* STAFF_PATROL_AREA_SIZE];
+        if (gStaffPatrolAreasMetaData->IsMetaData() == false)
+        {
+            log_info("initialize staff patrol meta data...");
+            gStaffPatrolAreasMetaData->Initialize(StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_1X1);
+        }
+    }
+    if (gStaffPatrolAreasMetaData == nullptr ||
+        gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_4X4)
+    {
+        x = (x & 0x1F80) >> 7;
+        y = (y & 0x1F80) >> 1;
 
-    int32_t peepOffset = staffIndex * STAFF_PATROL_AREA_SIZE;
-    int32_t offset = (x | y) >> 5;
-    int32_t bitIndex = (x | y) & 0x1F;
-    gStaffPatrolAreas[peepOffset + offset] ^= (1 << bitIndex);
+        int32_t peepOffset = staffIndex * STAFF_PATROL_AREA_SIZE;
+        int32_t offset = (x | y) >> 5;
+        int32_t bitIndex = (x | y) & 0x1F;
+        gStaffPatrolAreas[peepOffset + offset] ^= (1 << bitIndex);
+    }
+    else if (gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex].m_TileMode == StaffPatrolMetaData::STAFF_PATROL_AREA_TILEMODE_1X1)
+    {
+        int32_t tileX = (x & 0x1FE0) >> 5; // 0..256
+        int32_t tileY = (y & 0x1FE0) >> 5; // 0..256
+
+        auto& metaData = gStaffPatrolAreasMetaData->m_StaffPatrolMetaData[staffIndex];
+        tileX -= metaData.m_OffsetX;
+        tileY -= metaData.m_OffsetY;
+
+        int offsetX = 0;
+        if (tileX >= 64) offsetX = tileX - 63;
+        else if (tileX < 0) offsetX = tileX;
+
+        int offsetY = 0;
+        if (tileY >= 64) offsetY = tileY - 63;
+        else if (tileY < 0) offsetY = tileY;
+
+        auto activeData = BitArray<64, 64>::AccessAsBitArray(&gStaffPatrolAreas[staffIndex * STAFF_PATROL_AREA_SIZE], STAFF_PATROL_AREA_SIZE);
+        if (offsetX != 0 || offsetY != 0)
+        {
+            if (offsetX >= 64 || offsetY >= 64 || offsetX <= -64 || offsetY <= -64)
+            {
+                // Special case, no old data will be saved!
+                // So we have to make sure there is no old data...
+
+                if (activeData->GetAnyBitSet() != 0)
+                {
+                    log_info("can not toggle bit for xy!!!");
+                    return;
+                }
+
+                // We do not need to do anything else...
+            }
+            else
+            {
+                uint32_t tempArray[STAFF_PATROL_AREA_SIZE];
+                auto oldData = BitArray<64, 64>::AccessAsBitArray(tempArray);
+                oldData->AssignData(*activeData, 0, 0);
+                if (offsetX < 0 && oldData->GetAnyBitSetRangeXY(64 + offsetX, 0, 63, 63) != 0)
+                {
+                    log_info("can not toggle bit for xy!!!");
+                    return;
+                }
+                if (offsetX > 0 && oldData->GetAnyBitSetRangeXY(0, 0, offsetX, 63) != 0)
+                {
+                    log_info("can not toggle bit for xy!!!");
+                    return;
+                }
+                if (offsetY < 0 && oldData->GetAnyBitSetRangeXY(0, 64 + offsetY, 63, 63) != 0)
+                {
+                    log_info("can not toggle bit for xy!!!");
+                    return;
+                }
+                if (offsetY > 0 && oldData->GetAnyBitSetRangeXY(0, 0, 63, offsetY) != 0)
+                {
+                    log_info("can not toggle bit for xy!!!");
+                    return;
+                }
+                activeData->AssignData(*oldData, offsetX, offsetY);
+            }
+            metaData.m_OffsetX += offsetX;
+            metaData.m_OffsetY += offsetY;
+
+            tileX -= offsetX;
+            tileY -= offsetY;
+        }
+
+        activeData->ToggleBit(tileX, tileY);
+    }
 }
 
 /**

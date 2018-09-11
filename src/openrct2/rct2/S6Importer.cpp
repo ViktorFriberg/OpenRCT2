@@ -474,6 +474,8 @@ public:
                 OWNERSHIP_OWNED);
             // clang-format on
         }
+
+        staff_patrol_area_meta_data_initialize();
     }
 
     void ImportRides()
